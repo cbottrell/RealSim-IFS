@@ -1,6 +1,102 @@
 import os,sys
+import multiprocessing
 import numpy as np
 from copy import copy
+from astropy.io import fits
+from astropy.cosmology import FlatLambdaCDM
+from astropy.convolution import convolve
+from astropy.convolution import Gaussian2DKernel
+
+def Pool_Processes(fcn,args,processes=1):
+    pool = multiprocessing.Pool(processes)
+    out = pool.map(fcn,args)  
+    pool.close()
+    pool.join()
+    del pool
+    return out
+
+def Convolve_Slice(args):
+    data,kernel=args
+    return convolve(data,kernel)
+
+def Prepare_IFS(filename,redshift=0.046,psf_type='None',psf_fwhm_arcsec=1.5,
+                cosmo=FlatLambdaCDM(H0=70,Om0=0.3)):
+    
+    if not os.access(filename,0):
+        sys.exit('Datacube not found. Quitting...')
+    
+    if filename.endswith('.fits'):
+        data = np.transpose(fits.getdata(filename),[2,0,1])
+        hdr = fits.getheader(filename)
+    else:
+        sys.exit('Datacube is not in FITS format. Quitting...')
+        
+    # speed of light [m/s]
+    speed_of_light = 2.99792458e8
+    # kiloparsec per arcsecond scale
+    kpc_per_arcsec = cosmo.kpc_proper_per_arcmin(z=redshift).value/60. # [kpc/arcsec]
+    # luminosity distance in Mpc
+    luminosity_distance = cosmo.luminosity_distance(z=redshift) # [Mpc]
+        
+    fov_size_kpc = hdr['FOVSIZE']/1000.
+    kpc_per_pixel = fov_size_kpc/hdr['NAXIS2']
+    arcsec_per_pixel = kpc_per_pixel/kpc_per_arcsec
+    
+    if psf_type is not 'None':
+        valid_psf_types = ['Gaussian',]
+        if psf_type in valid_psf_types:
+            if psf_type == 'Gaussian':
+                std = psf_fwhm_arcsec/arcsec_per_pixel/2.355
+                kernel = Gaussian2DKernel(x_stddev=std,y_stddev=std)  
+            if "SLURM_JOB_CPUS_PER_NODE" in os.environ:
+                cpu_count = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
+            else:
+                cpu_count = multiprocessing.cpu_count()
+            args = [(data[i],kernel) for i in range(len(data))]
+            data = np.array(Pool_Processes(Convolve_Slice,args,cpu_count))
+    return data
+        
+def Generate_Maps_From_File(losvd_name):
+    if not os.access(losvd_name,0):
+        print('LOSVD file not found')
+    else:
+        losvd_head = fits.getheader(losvd_name)
+        losvd_data = fits.getdata(losvd_name)
+        losvd_shape = losvd_data.shape
+        vlim = losvd_head['VLIM'] # km/s
+        delv = losvd_head['DELV'] # km/s
+        fov = losvd_head['FOVSIZE']/1000. # kpc
+        vel = np.linspace(-vlim,vlim,losvd_shape[-1],endpoint=False)+delv/2.
+        sum_wi = np.nansum(losvd_data,axis=-1)
+        sum_wivi = np.nansum(losvd_data*vel,axis=-1)
+        vbar = sum_wivi/sum_wi
+        Nprime = np.nansum(losvd_data>0,axis=-1)
+        vstd = np.nansum(losvd_data*(vel-vbar[...,np.newaxis])**2,axis=-1)
+        vstd /= (Nprime-1)/Nprime*sum_wi
+        vstd = np.sqrt(vstd)
+        losvd_maps = np.array([sum_wi,vbar,vstd])
+        return losvd_maps
+    
+def Generate_Maps_From_Data(losvd_name,losvd_data):
+    if not os.access(losvd_name,0):
+        print('LOSVD file not found')
+    else:
+        losvd_head = fits.getheader(losvd_name)
+        losvd_data = losvd_data.transpose(1,2,0)
+        losvd_shape = losvd_data.shape
+        vlim = losvd_head['VLIM'] # km/s
+        delv = losvd_head['DELV'] # km/s
+        fov = losvd_head['FOVSIZE']/1000. # kpc
+        vel = np.linspace(-vlim,vlim,losvd_shape[-1],endpoint=False)+delv/2.
+        sum_wi = np.nansum(losvd_data,axis=-1)
+        sum_wivi = np.nansum(losvd_data*vel,axis=-1)
+        vbar = sum_wivi/sum_wi
+        Nprime = np.nansum(losvd_data>0,axis=-1)
+        vstd = np.nansum(losvd_data*(vel-vbar[...,np.newaxis])**2,axis=-1)
+        vstd /= (Nprime-1)/Nprime*sum_wi
+        vstd = np.sqrt(vstd)
+        losvd_maps = np.array([sum_wi,vbar,vstd])
+        return losvd_maps   
 
 def Err_n_observations():
     print('You must select `n_observations` that is either:')
@@ -106,7 +202,7 @@ def MaNGA_Observe(n_observations='Classic',
     # https://www.sdss.org/dr14/manga/manga-survey-strategy/ and Law et al. (2015)
     fiber_diameter_arcsec = fiber_diameter_mm*arcsec_per_mm # arcsec
     core_diameter_arcsec = core_diameter_mm*arcsec_per_mm # arcsec
-    cladding_arcsec = (core_diameter_mm-fiber_diameter_mm)*arcsec_per_mm # arcsec
+    cladding_arcsec = (fiber_diameter_mm-core_diameter_mm)*arcsec_per_mm # arcsec
     exposure_offset_arcsec = fiber_diameter_arcsec/np.sqrt(3) # arscec
     valid_bundle_names = ['N7','N19','N37','N61','N91','N127']
 
