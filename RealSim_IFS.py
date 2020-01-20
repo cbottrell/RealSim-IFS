@@ -171,7 +171,7 @@ def MaNGA_Observe(n_observations='Classic',
     
     (xc_arr,yc_arr) or (xc_arr,yc_arr,params)
     
-    * `xc_arr` and `yc_arr` are the coordinates of all fibers in the `n_observations` of exposures used in the observing strategy. They each have shape (`fibers_per_bundle`, `n_observations`) where `fibers_per_bundle` is the total number of fibers in an individual bundle and is an output passed to `params`. 
+    * `xc_arr` and `yc_arr` are the coordinates of all fibers (in [arcsec]) in the `n_observations` of exposures used in the observing strategy. They each have shape (`fibers_per_bundle`, `n_observations`) where `fibers_per_bundle` is the total number of fibers in an individual bundle and is an output passed to `params`. 
     
     * `params` is the dictionary of variables that is returned if `return_params` is True.
     '''  
