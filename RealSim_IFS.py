@@ -422,7 +422,9 @@ def Fiber_Observe(cube_data,core_x_pixels,core_y_pixels,core_diameter_pixels,ret
     if len(rfactor)==1 and N_fibers>1:
         core_radius_pixels = np.ones((N_fibers),dtype=int).flatten()*core_radius_pixels.flatten()
         rfactor = np.ones((N_fibers),dtype=int)*rfactor.flatten()
+        
     weight_map = weight_map.astype(float)
+    core_array = np.zeros((N_fibers,Nels)) 
 
     # Each refined grid is unique to the scale factor.
     # Each original grid can also differ. Therefore, need loop.
@@ -440,17 +442,19 @@ def Fiber_Observe(cube_data,core_x_pixels,core_y_pixels,core_diameter_pixels,ret
         rsize_x,rsize_y = (col_max_-col_min_)*rfactor_,(row_max_-row_min_)*rfactor_
         Yr,Xr = np.ogrid[0:rsize_y,0:rsize_x]
         maskr = np.zeros((rsize_y,rsize_x))
-
+        
         maskr[np.sqrt((Xr+col_min_*rfactor_+0.5 - core_x_pixels_*rfactor_)**2 +
                       (Yr+row_min_*rfactor_+0.5 - core_y_pixels_*rfactor_)**2) < core_radius_pixels_*rfactor_ ]=1
-
+ 
         weight_mapr = np.zeros((size_y*rfactor_,size_x*rfactor_))
         weight_mapr[row_min_*rfactor_:row_max_*rfactor_,col_min_*rfactor_:col_max_*rfactor_] = maskr
         patch = maskr.reshape(row_max_-row_min_,rfactor_,col_max_-col_min_,rfactor_).sum(axis=(1,3)).astype(float)/rfactor_**2
         weight_map[i,row_min_:row_max_,col_min_:col_max_]=patch
+        core_array[i] = np.sum(cube_data*weight_map[i].reshape(1,size_y,size_x),axis=(1,2))
         
-    cube_data = cube_data[np.newaxis,...]    
-    core_array = np.sum(cube_data*weight_map.reshape(N_fibers,1,size_y,size_x),axis=(2,3))
+#     cube_data = cube_data[np.newaxis,...] 
+#     core_array = np.sum(cube_data*weight_map.reshape(N_fibers,1,size_y,size_x),axis=(2,3))
+
     return (core_array,weight_map) if return_weights else core_array
 
 
