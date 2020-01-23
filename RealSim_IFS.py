@@ -54,6 +54,8 @@ def Prepare_IFS(filename,redshift=0.046,psf_type='None',psf_fwhm_arcsec=1.5,
                 cpu_count = multiprocessing.cpu_count()
             args = [(data[i],kernel) for i in range(len(data))]
             data = np.array(Pool_Processes(Convolve_Slice,args,cpu_count))
+        else:
+            raise Exception('Choose PSF profile from list of valid PSF profiles: \n {}'.format(valid_psf_types))
     return data
         
 def Generate_Maps_From_File(losvd_name):
