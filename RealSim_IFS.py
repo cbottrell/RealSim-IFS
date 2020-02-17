@@ -475,6 +475,10 @@ def Change_Coords(core_x_pixels,core_y_pixels,core_diameter_pixels,
     (10,15) cannot be scaled to (5,3) as this would require a scale of 2 in the y-direction 
     and a scale of 5 in the x-direction. 
     
+    The output `core_x_pixels` and `core_y_pixels` will have a coordinate system defined with
+    with (0,0) at the upper left corner of the image. Therefore, with output grid dimensions 
+    of (10,10), the center of the fiber array would be (5,5).
+    
     Argument descriptions are the same as for the Fiber_Observe function.
     
     `input_grid_dims` [int,tuple]: 
@@ -550,13 +554,13 @@ def Change_Coords(core_x_pixels,core_y_pixels,core_diameter_pixels,
     core_x_pixels *= scale
     core_y_pixels *= scale
     core_diameter_pixels *= scale
-    #print(size_x,size_y,osize_x,osize_y,scale)
     
     return core_x_pixels.flatten(),core_y_pixels.flatten(),core_diameter_pixels.flatten()
     
     
 def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,grid_dimensions_pixels,
-                  use_gaussian_weights=False,gaussian_sigma_pixels=1.4,rlim_pixels=None):
+                  use_gaussian_weights=False,gaussian_sigma_pixels=1.4,rlim_pixels=None,
+                  use_broadcasting=False):
     
     '''
     With a fiber core array [ndarray] with shape (`N_fibers`,`Nels`) along with their
@@ -622,6 +626,15 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
     The distance in pixels from a fiber core beyond which the weights assigned 
     to all pixels in a weight map are zero (default None, i.e. the weights extend
     to infinity). 
+    
+    `use_broadcasting` [boolean]:
+    The broadcasting of the weight maps with the spectra from each fiber to produce
+    the output datacubes can be very memory-intensive. You can estimate the memory
+    demand by computing (N_fibers*Nels*output_spatial_y*output_spatial_x*64/8/1e9)
+    for the size of the object that needs to be summed over the N_fibers dimension
+    in Gigabytes. If this exceeds your memory requirements, `use_broadcasting` should
+    be set to False. This will greatly increase the computation time at the expense
+    of memory intensiveness.
     
     '''
     
@@ -743,8 +756,17 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
             patch = maskr.reshape(row_max_-row_min_,rfactor_,col_max_-col_min_,rfactor_).sum(axis=(1,3)).astype(float)/rfactor_**2
             weight_map[i,row_min_:row_max_,col_min_:col_max_]=patch/np.sum(patch)
             weight_map[np.isnan(weight_map)]=0.
-
-        out_cube = np.sum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
+            
+        if not use_broadcasting:
+            # code to reduce memory demand
+            out_cube = np.zeros((Nels,size_y,size_x))
+            fiber_data = fiber_data.reshape(N_fibers,Nels,1,1)
+            weight_map = weight_map.reshape(N_fibers,1,size_y,size_x)
+            for i in range(N_fibers):
+                out_cube += fiber_data[i]*weight_map[i]
+        else:
+            out_cube = np.sum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
+        
         return out_cube,weight_map
     
     else:
@@ -804,10 +826,18 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
 
         weight_map*=alpha
         weight_map[np.isnan(weight_map)]=0
-        out_cube = np.sum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
+        
+        if not use_broadcasting:
+            # code to reduce memory demand
+            out_cube = np.zeros((Nels,size_y,size_x))
+            fiber_data = fiber_data.reshape(N_fibers,Nels,1,1)
+            weight_map = weight_map.reshape(N_fibers,1,size_y,size_x)
+            for i in range(N_fibers):
+                out_cube += fiber_data[i]*weight_map[i]
+        else:
+            out_cube = np.sum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
+        
         return out_cube,weight_map
-    
-    
     
     
 if __name__ == '__main__':
