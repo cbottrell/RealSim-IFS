@@ -134,9 +134,8 @@ def Rotate(v,rotation_degrees):
 def MaNGA_Observe(n_observations='Classic',
                   fibers_per_side=4,
                   bundle_name='None',
-                  fiber_diameter_mm=0.150,
-                  core_diameter_mm=0.120,
-                  arcsec_per_mm=1./0.06048,
+                  fiber_diameter_arcsec=2.480,
+                  core_diameter_arcsec=1.984,
                   rotation_degrees=0.,
                   bundle_xoffset_arcsec=0.,
                   bundle_yoffset_arcsec=0.,
@@ -159,9 +158,9 @@ def MaNGA_Observe(n_observations='Classic',
     
     * `bundle_name` (string) supersedes `fibers_per_side`. Setting `bundle_name` to a valid MaNGA fibre bunde name (e.g. `N61`) will generate bundles with that specific fibre pattern and IGNORE the `fibers_per_side` parameter. By default, `bundle_name` is `None` and must be set to `None` to use the `fibers_per_side` keyword.
     
-    * `fiber_diameter_mm` and `fiber_core_diameter` (floats) are the desired physical sizes of each individual fibre (core+cladding) and core in the bundle in [mm].
+    * `fiber_diameter_arcsec` and `core_diameter_arcsec` (floats) are the desired angular sizes of each individual fibre (core+cladding) and core in the bundle in [arcsec]. By default, these are set to the exact MaNGA specifications.
     
-    * `arcsec_per_mm` (float) is the physical-to-angular conversion ratio [arcsec/mm] at the prime-focus of instrument. For MaNGA, the reciprocal angular-to-physial scale is 60.48 microns/arcsec.
+    * `arcsec_per_mm` (float) [**deprecated**] is the physical-to-angular conversion ratio [arcsec/mm] at the prime-focus of instrument. For MaNGA, the reciprocal angular-to-physial scale is 60.48 microns/arcsec.
     
     * `rotation_degrees` (float) sets the counter-clockwise rotation (in degrees) of an individual exposure or full observing pattern. If `n_observations` is `Classic` or 1, `rotation_degrees` must be a single float. `n_observations` is an integer greater than 1, then `rotation_degrees` must be a list or numpy array whose elements give the rotation of each individual exposure. For the same rotation of each exposure, set the `rotation_degrees` keyword to something like np.zeros(n_observations)+rotation_degrees. 
     
@@ -180,9 +179,9 @@ def MaNGA_Observe(n_observations='Classic',
        
     if n_observations == 'Classic':
         # restore all params to MaNGA defaults
-        fiber_diameter_mm=0.150
-        core_diameter_mm=0.120
-        arcsec_per_mm=1./0.06048
+        fiber_diameter_arcsec=2.480
+        core_diameter_arcsec=1.984
+        #arcsec_per_mm=1./0.06048
         bundle_xoffset_arcsec=0.
         bundle_yoffset_arcsec=0.
         if type(rotation_degrees) is not float:
@@ -202,9 +201,9 @@ def MaNGA_Observe(n_observations='Classic',
 
     # Useful quantities. See also:
     # https://www.sdss.org/dr14/manga/manga-survey-strategy/ and Law et al. (2015)
-    fiber_diameter_arcsec = fiber_diameter_mm*arcsec_per_mm # arcsec
-    core_diameter_arcsec = core_diameter_mm*arcsec_per_mm # arcsec
-    cladding_arcsec = (fiber_diameter_mm-core_diameter_mm)*arcsec_per_mm # arcsec
+    #fiber_diameter_arcsec = fiber_diameter_mm*arcsec_per_mm # arcsec
+    #core_diameter_arcsec = core_diameter_mm*arcsec_per_mm # arcsec
+    cladding_arcsec = (fiber_diameter_arcsec-core_diameter_arcsec)/2. # arcsec
     exposure_offset_arcsec = fiber_diameter_arcsec/np.sqrt(3) # arscec
     valid_bundle_names = ['N7','N19','N37','N61','N91','N127']
 
@@ -289,9 +288,6 @@ def MaNGA_Observe(n_observations='Classic',
         params = {'bundle_name':bundle_name,
                   'fibers_per_side':fibers_per_side,
                   'n_observations':n_observations,
-                  'fiber_diameter_mm':fiber_diameter_mm,
-                  'core_diameter_mm':core_diameter_mm,
-                  'arcsec_per_mm':arcsec_per_mm,
                   'rotation_degrees':rotation_degrees,
                   'bundle_xoffset_arcsec':bundle_xoffset_arcsec,
                   'bundle_yoffset_arcsec':bundle_yoffset_arcsec,
