@@ -1,7 +1,8 @@
-import os,sys
+import os,sys,time
 import multiprocessing
 import numpy as np
 from copy import copy
+from shutil import copy as cp
 from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 from astropy.convolution import convolve
@@ -15,6 +16,167 @@ def Pool_Processes(fcn,args,processes=1):
     del pool
     return out
 
+def get_random_seeing_manga(seed=None,seeing_pool=None):
+    '''Select random seeing full-width at half-maximum (FWHM) [arcsec] from the set of seeing values in MaNGA. By default, the seeing values derive from the MaNGA drpall tables which include min, max, and median guide star seeing estimates for every combined set of exposures.
+    
+    Keywords:
+    
+        * `seed` (int) is the random seed for seeing selection. Setting the seed allows one to reproduce the selection.
+    
+        * `seeing_pool` (list or np.ndarray) is a manually generated pool of seeing FWHM [arcesec] from which to draw.
+        
+    Returns: seeing FWHM [arcsec].'''
+    if seed == None:
+        np.random.seed()
+    else:
+        np.random.seed(seed)
+        
+    if seeing_pool == None:
+        drpall_name = 'drpall-v2_4_3.fits'
+        # get drp all file for guide-star seeing
+        if not os.access(drpall_name,0): 
+            drpall_backup = '/home/bottrell/scratch/Merger_Kinematics/RealSim-IFS/Resources/{}'.format(drpall_name)
+            # check for local copy in Resources directory
+            if os.access(drpall_backup,0):
+                cp(drpall_backup,drpall_name)
+            else:
+                drpall_url = 'https://data.sdss.org/sas/dr16/manga/spectro/redux/v2_4_3/{}'.format(drpall_name)
+                os.system('wget {}'.format(drpall_url))
+        drpall_data = fits.getdata(drpall_name)
+        seeing_pool = drpall_data['SEEMED']
+    else:
+        if type(seeing_pool) not in [list,np.ndarray]:
+            raise Exception('seeing_pool not correct instance. Must be list or 1-D numpy array. Stopping...')
+    return np.random.choice(seeing_pool,replace=True)
+
+
+def get_random_redshift_manga(seed=None,redshift_pool=None):
+    '''Select random redshift from the set of redshifts for ALL MaNGA targets. By default, the redshifts derive from the targeting table found here: https://www.sdss.org/dr16/manga/manga-target-selection/targeting-catalog/ which are taken from the NSA catalogues. To obtain the target redshifts, I use the bitmasks for primary, secondary, and colour-enchanced (primary+) targets.
+    
+    Keywords:
+    
+        * `seed` (int) is the random seed for redshift selection. Setting the seed allows one to reproduce the selection.
+        
+        * `redshift_pool` (list or np.ndarray) is a manually generated pool of redshifts from which to draw.
+        
+    Returns: redshift, z.'''
+    if seed == None:
+        np.random.seed()
+    else:
+        np.random.seed(seed)
+    if redshift_pool == None:
+        zcat_name = 'MaNGA_target_redshifts-all.txt'
+        if not os.access(zcat_name,0):   
+            # check for local copy in Resources directory
+            zcat_backup = '/home/bottrell/scratch/Merger_Kinematics/RealSim-IFS/Resources/{}'.format(zcat_name)
+            if os.access(zcat_backup,0):
+                cp(zcat_backup,zcat_name)
+                redshift_pool = np.loadtxt(zcat_name)
+            else:
+                # create table from targeting catalog
+                targetcat_name = 'MaNGA_targets_extNSA_tiled_ancillary.fits'
+                if not os.access(targetcat_name,0):
+                    targetcat_url = 'https://data.sdss.org/sas/dr16/manga/target/v1_2_27/{}'.format(targetcat_name)
+                    os.system('wget {}'.format(targetcat_url))
+                redshift_pool = fits.getdata(targetcat_name)['NSA_Z']
+                bitmask = fits.getdata(targetcat_name)['MANGA_TARGET1']
+                pri_mask = (bitmask & 1024)!=0 # primary
+                sec_mask = (bitmask & 2048)!=0 # secondary
+                cen_mask = (bitmask & 4096)!=0 # colour-enhanced (primary+)
+                redshift_pool = redshift_pool[(pri_mask+sec_mask+cen_mask)>=1]
+        else:
+            redshift_pool = np.loadtxt(zcat_name) 
+    else:
+        if type(redshift_pool) not in [list,np.ndarray]:
+            raise Exception('redshift_pool not correct instance. Must be list or 1-D numpy array. Stopping...')
+    return np.random.choice(redshift_pool,replace=True)
+
+
+def apply_seeing(datacube, kpc_per_pixel,  redshift = 0.05, seeing_model='manga', 
+                 seeing_fwhm_arcsec=1.5, cosmo=None, use_threading=False, n_threads=1):
+    '''Apply atmospheric or other pre-instrument seeing model to datacube corresponding to the target redshift. Currently, this function only allows a fixed seeing that is applied to all wavelength/velocity elements of the input datacube. However, the function can be easily modified to allow a seeing model which varies with wavelength. The seeing angular full width at half-maximum (FWHM) [arcsec] can be converted to pixels in the datacube using the redshift, z, and the physical spatial pixel scale of the datacube.
+    
+    Keywords:
+    
+        * `datacube` (np.ndarray) is the datacube to be convolved slice-by-slice with the seeing. The slices can either be wavelength or line-of-sight velocity. The wavelength and velocity channels should be first in the axis order (i.e. (Nels,spatial_y,spatial_x), where Nels is the number of wavelenght or velocity elements).
+    
+        * `kpc_per_pixel` (int, float) is the physical spatial pixel scale for the datacube in [kpc]. This is needed to compute the angular scale of each pixel once a given angular diameter distance is adopted.
+        
+        * `redshift` (int,float) the target redshift at which the source is to be observed. The redshift is used to determine the angular diameter distance to the source and subsequently compute the angular size it subtends in the sky. 
+        
+        * `seeing_model` (string) [options: manga (default), gaussian] is seeing model which approximates the atmospheric or pre-instrumental seeing. 
+        
+            - `manga` atmospheric guide-star seeing is modelled as a combination of two gaussians (private communication w/ David Law, Jan, 2020):
+            
+                theta = seeing_fwhm_pixels / 1.05 
+                kernel = 9/13 * Gaussian(fwhm=theta) + 4/13 * Gaussian(fwhm=2*theta)
+                
+            - `gaussian` a basic Gaussian seeing model:
+                kernel = Gaussian(fwhm=seeing)
+        
+        * `seeing_fwhm_arcsec` (int,float) the angular scale of the seeing in [arcsec]
+        
+        * `cosmo` (astropy.cosmology instance) the cosmology which defines angular scales and distances corresponding to a given redshift. Default is a LambdaCDM cosmology with Planck 2018 parameters (https://arxiv.org/pdf/1807.06209.pdf) [last updated: February, 2020].
+        
+        * `use_threading` (boolean) whether to use multiprocessing Pool to apply convolutions in each slice. 
+        
+        * `n_threads` (int) the number of threads to be used if `use_threading` is True.
+        
+    Returns: `outcube` (np.ndarray) Seeing-convolved datacube with same shape as input datacube.
+    '''
+    
+    # threadable kernel-convolution function
+    def convolve_slice(args):
+        img,kernel=args
+        return convolve(img,kernel)
+    
+    # cosmology
+    if cosmo == None:
+        cosmo=FlatLambdaCDM(H0=67.4,Om0=0.315)
+    
+    # speed of light [m/s]
+    speed_of_light = 2.99792458e8
+    # kiloparsec per arcsecond scale
+    kpc_per_arcsec = cosmo.kpc_proper_per_arcmin(z=redshift).value/60. # [kpc/arcsec]
+    # luminosity distance in Mpc (not used but added to header)
+    luminosity_distance = cosmo.luminosity_distance(z=redshift).value # [Mpc]
+    # compute angular pixel scale from cosmology
+    arcsec_per_pixel = kpc_per_pixel / kpc_per_arcsec # [arcsec/pixel]
+    
+    valid_seeing_models = ['manga','gaussian']
+    
+    if seeing_model == 'manga':
+        # MaNGA seeing model from private communication w/ David Law (January, 2020)
+        from astropy.convolution import Gaussian2DKernel
+        seeing_std_pixels = seeing_fwhm_arcsec/arcsec_per_pixel/1.05/2.335
+        kernel = (9/13*Gaussian2DKernel(seeing_std_pixels)).__add__(4/13*Gaussian2DKernel(2*seeing_std_pixels))          
+    elif seeing_model == 'gaussian':
+        # standard gaussian seeing
+        from astropy.convolution import Gaussian2DKernel
+        seeing_std_pixels = seeing_fwhm_arcsec/arcsec_per_pixel/2.335
+        kernel = Gaussian2DKernel(seeing_std_pixels)  
+    else:
+        raise Exception('Incompatible atmospheric seeing model. Choose seeing model from list of compatible seeing models: \n {}'.format(valid_seeing_models))
+    
+    # convolve, use threading or not
+    if not use_threading:
+        outcube = np.zeros_like(datacube)
+        for i in range(len(outcube)):
+            outcube[i]=convolve_slice((datacube[i],kernel))
+    else:
+        if type(n_processes) != int:
+            raise Exception('use_threading is true but n_processes is not an integer. Stopping...')
+        pool = multiprocessing.Pool(n_processes)
+        args = [(datacube[i],kernel) for i in range(len(datacube))]
+        outcube = np.array(pool.map(convolve_slice,args))
+        pool.close()
+        pool.join()
+        del pool
+
+    return outcube
+
+
+######################### Staged for removal #########################
 def Convolve_Slice(args):
     data,kernel=args
     return convolve(data,kernel)
@@ -57,7 +219,8 @@ def Prepare_IFS(filename,redshift=0.046,psf_type='None',psf_fwhm_arcsec=1.5,
         else:
             raise Exception('Choose PSF profile from list of valid PSF profiles: \n {}'.format(valid_psf_types))
     return data
-        
+######################### Staged for removal #########################
+
 def Generate_Maps_From_File(losvd_name):
     if not os.access(losvd_name,0):
         print('LOSVD file not found')
