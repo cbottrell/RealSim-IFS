@@ -26,12 +26,12 @@ def get_random_seeing_manga(seed=None,seeing_pool=None):
         * `seeing_pool` (list or np.ndarray) is a manually generated pool of seeing FWHM [arcesec] from which to draw.
         
     Returns: seeing FWHM [arcsec].'''
-    if seed == None:
+    if seed is None:
         np.random.seed()
     else:
         np.random.seed(seed)
         
-    if seeing_pool == None:
+    if seeing_pool is None:
         drpall_name = 'drpall-v2_4_3.fits'
         # get drp all file for guide-star seeing
         if not os.access(drpall_name,0): 
@@ -60,11 +60,11 @@ def get_random_redshift_manga(seed=None,redshift_pool=None):
         * `redshift_pool` (list or np.ndarray) is a manually generated pool of redshifts from which to draw.
         
     Returns: redshift, z.'''
-    if seed == None:
+    if seed is None:
         np.random.seed()
     else:
         np.random.seed(seed)
-    if redshift_pool == None:
+    if redshift_pool is None:
         zcat_name = 'MaNGA_target_redshifts-all.txt'
         if not os.access(zcat_name,0):   
             # check for local copy in Resources directory
