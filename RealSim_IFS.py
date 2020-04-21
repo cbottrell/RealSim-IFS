@@ -913,8 +913,15 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
             weight_mapr = np.zeros((size_y*rfactor_,size_x*rfactor_))
             weight_mapr[row_min_*rfactor_:row_max_*rfactor_,col_min_*rfactor_:col_max_*rfactor_] = maskr
             patch = maskr.reshape(row_max_-row_min_,rfactor_,col_max_-col_min_,rfactor_).sum(axis=(1,3)).astype(float)/rfactor_**2
-            weight_map[i,row_min_:row_max_,col_min_:col_max_]=patch/np.sum(patch)
-            weight_map[np.isnan(weight_map)]=0.
+            weight_map[i,row_min_:row_max_,col_min_:col_max_]=patch
+        
+        _weight_map_ = copy(weight_map)
+        alpha = np.nansum(weight_map,axis=(1,2)).reshape(-1,1,1)
+        normalization = np.nansum(weight_map,axis=0)
+        normalization[normalization==0]=np.nan
+        weight_map/=normalization
+        weight_map[np.isnan(weight_map)]=0.
+        weight_map/=alpha
             
         if not use_broadcasting:
             # code to reduce memory demand
@@ -926,7 +933,7 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
         else:
             out_cube = np.sum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
         
-        return out_cube,weight_map
+        return out_cube,_weight_map_
     
     else:
         
@@ -978,11 +985,14 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
         
         # normalization to determine intensity contribution of each fiber to each pixel
         # as in LAW et al 2016
+        
+        _weight_map_ = copy(weight_map)
+        _weight_map_[np.isnan(_weight_map_)]=0
+        
         alpha = 1./(np.pi*(core_radius_pixels)**2)
         normalization = np.sum(weight_map,axis=0)
         normalization[normalization==0]=np.nan
         weight_map/=normalization
-
         weight_map*=alpha
         weight_map[np.isnan(weight_map)]=0
         
@@ -996,7 +1006,7 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
         else:
             out_cube = np.sum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
         
-        return out_cube,weight_map
+        return out_cube,_weight_map_
     
     
 if __name__ == '__main__':
