@@ -990,11 +990,11 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
         _weight_map_[np.isnan(_weight_map_)]=0
         
         alpha = 1./(np.pi*(core_radius_pixels)**2)
-        normalization = np.sum(weight_map,axis=0)
+        normalization = np.nansum(weight_map,axis=0)
         normalization[normalization==0]=np.nan
         weight_map/=normalization
         weight_map*=alpha
-        weight_map[np.isnan(weight_map)]=0
+        weight_map[np.isnan(weight_map)]=0.
         
         if not use_broadcasting:
             # code to reduce memory demand
