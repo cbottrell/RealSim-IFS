@@ -14,6 +14,9 @@ from copy import copy
 import multiprocessing as mp
 import random
 import pymysql
+from matplotlib import rc
+rc('font',**{'family':'serif'})
+rc('text', usetex=True)
 
 def add_colorbar(im,ax,label,colour='white'):
     axin = ax.inset_axes(
