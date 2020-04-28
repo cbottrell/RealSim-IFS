@@ -80,7 +80,7 @@ def generate_figure(outfile,subhaloID,camera,snapID,use_sql=False,cnf_path=None)
     vmax = np.around(np.nanpercentile(np.log10(maps[0]/kpc_per_pixel**2),99.9)*2)/2
     im = ax.imshow(np.log10(maps[0]/kpc_per_pixel**2),vmin=vmin,vmax=vmax,cmap=cmap,origin='lower',aspect='auto',interpolation=None)
     cbar_colour = 'white'
-    label = r'Stellar surface density, $\log\;\Sigma_{\star}$ [M$_{\odot}}$/kpc$^2$]'
+    label = r'Stellar surface density, $\log\;\Sigma_{\star}$ [M$_{\odot}$/kpc$^2$]'
     add_colorbar(im,ax,label,colour=cbar_colour)
     
     txt = ['subhaloID: {}\n'.format(subhaloID),
