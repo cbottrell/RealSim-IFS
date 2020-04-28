@@ -149,8 +149,8 @@ def add_ideal_info(ax,header):
     for txt in txts:
         ax.text(0.025,0.975-offset,''.join(txt),transform=ax.transAxes,ha='left',va='top',color='white',size=15)
         offset+=0.07
-    ax.axhline(y=0.975*npixels,xmax=0.975,xmin=0.775,c='white',lw=2)
-    ax.text(0.975,0.96,'{:.1f} kpc'.format(fov_kpc/10),ha='right',va='top',color='white',size=15,transform=ax.transAxes)
+    ax.axhline(y=0.975*npixels,xmax=0.975,xmin=0.725,c='white',lw=2)
+    ax.text(0.975,0.96,'{:.1f} kpc'.format(2.5*fov_kpc/10),ha='right',va='top',color='white',size=15,transform=ax.transAxes)
 
 def overlay_ifu_design(fig,axarr,datacube,arcsec_per_pixel,manga_ifu_design='N127'):
     (xc_arcsec,yc_arcsec),params = RealSim_IFS.MaNGA_Observe(bundle_name=manga_ifu_design,
