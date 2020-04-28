@@ -15,8 +15,6 @@ import multiprocessing as mp
 import random
 import pymysql
 
-
-
 def add_colorbar(im,ax,label,colour='white'):
     axin = ax.inset_axes(
             [0.05,0.05, 0.9, 0.025], transform=ax.transAxes)
@@ -89,8 +87,8 @@ def generate_figure(outfile,subhaloID,camera,snapID,use_sql=False,cnf_path=None)
                         '$r_{{sep}}$: {:.1f}\n'.format(rsep),
                         '$\mu$: {:.2f}'.format(mu)])
     ax.text(0.025,0.975,''.join(txt),transform=ax.transAxes,ha='left',va='top',color='white',size=12)
-    ax.axhline(y=0.975*maps.shape[1],xmax=0.975,xmin=0.775,c='white',lw=2)
-    ax.text(0.975,0.96,'{:.1f} kpc'.format(fov_kpc/10),ha='right',va='top',color='white',size=12,transform=ax.transAxes)
+    ax.axhline(y=0.975*maps.shape[1],xmax=0.975,xmin=0.725,c='white',lw=2)
+    ax.text(0.975,0.96,'{:.1f} kpc'.format(2.5*fov_kpc/10),ha='right',va='top',color='white',size=12,transform=ax.transAxes)
     
     ax = axarr[1]
     cmap = copy(plt.cm.jet)
