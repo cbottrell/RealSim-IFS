@@ -7,6 +7,7 @@ from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 from astropy.convolution import convolve
 from astropy.convolution import Gaussian2DKernel
+from progress.bar import FillingCirclesBar
 
 def Pool_Processes(fcn,args,processes=1):
     pool = multiprocessing.Pool(processes)
@@ -993,32 +994,51 @@ def Fiber_to_Grid(fiber_data,core_x_pixels,core_y_pixels,core_diameter_pixels,gr
         # normalization to determine intensity contribution of each fiber to each pixel
         # as in LAW et al 2016
         
-        # mask weights where data is masked to avoid over-normalization
-        weight_map = weight_map.reshape(N_fibers,1,size_y,size_x)*np.ones((1,Nels,1,1))
-        weight_map[np.isnan(fiber_data),:,:] = np.nan
-        weight_map = weight_map.reshape(N_fibers,size_y,size_x)
+#         # mask weights where data is masked to avoid over-normalization
+#         weight_map = weight_map.reshape(N_fibers,1,size_y,size_x)*np.ones((1,Nels,1,1))
+#         weight_map[np.isnan(fiber_data),:,:] = np.nan
+#         weight_map = weight_map.reshape(N_fibers,size_y,size_x)
                                         
-        _weight_map_ = copy(weight_map)                   
+#         _weight_map_ = copy(weight_map)                   
+#         alpha = 1./(np.pi*(core_radius_pixels)**2)
+#         normalization = np.nansum(weight_map,axis=0)
+#         normalization[normalization==0]=np.nan
+#         weight_map/=normalization
+#         weight_map*=alpha
+#         weight_map[np.isnan(weight_map)]=0.
+        
+#         if not use_broadcasting:
+#             # code to reduce memory demand
+#             out_cube = np.zeros((Nels,size_y,size_x))
+#             fiber_data = fiber_data.reshape(N_fibers,Nels,1,1)
+#             weight_map = weight_map.reshape(N_fibers,1,size_y,size_x)
+#             for i in range(N_fibers):
+#                 out_fiber = fiber_data[i]*weight_map[i]
+#                 out_fiber[np.isnan(out_fiber)]=0.
+#                 out_cube += out_fiber
+#         else:
+#             out_cube = np.nansum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
+        
         alpha = 1./(np.pi*(core_radius_pixels)**2)
-        normalization = np.nansum(weight_map,axis=0)
-        normalization[normalization==0]=np.nan
-        weight_map/=normalization
-        weight_map*=alpha
-        weight_map[np.isnan(weight_map)]=0.
         
         if not use_broadcasting:
-            # code to reduce memory demand
             out_cube = np.zeros((Nels,size_y,size_x))
-            fiber_data = fiber_data.reshape(N_fibers,Nels,1,1)
-            weight_map = weight_map.reshape(N_fibers,1,size_y,size_x)
-            for i in range(N_fibers):
-                out_fiber = fiber_data[i]*weight_map[i]
-                out_fiber[np.isnan(out_fiber)]=0.
-                out_cube += out_fiber
-        else:
-            out_cube = np.nansum(fiber_data.reshape(N_fibers,Nels,1,1)*weight_map.reshape(N_fibers,1,size_y,size_x),axis=0)
-        
-        return out_cube,_weight_map_
+            bar = FillingCirclesBar('Spatial reconstruction', max=Nels)
+            for i in range(Nels):
+                weight_map_el = copy(weight_map)
+                weight_map_el[np.isnan(fiber_data[:,i])] = np.nan
+                normalization_el = np.nansum(weight_map_el,axis=0)
+                normalization_el[normalization_el==0]=np.nan
+                weight_map_el/=normalization_el
+                weight_map_el*=alpha
+                weight_map_el[np.isnan(weight_map)]=0.
+                out_el = np.nansum(fiber_data[:,i].reshape(N_fibers,1,1)*weight_map_el,axis=0)
+                out_el[np.isnan(out_el)]=0.
+                out_cube[i] = out_el
+                bar.next()
+            bar.finish()
+
+        return out_cube,weight_map
     
     
 if __name__ == '__main__':
